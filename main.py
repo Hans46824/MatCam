@@ -93,7 +93,7 @@ def deteksi_array_jari(hand_landmarks):
 
     # 2. Jempol terbuka ke samping (untuk angka 5, 7, 8, 9):
     # Jempol merenggang keluar menjauhi pangkal telunjuk, tengah, dan kelingking.
-    # Pada kepalan tangan (angka 0) atau jari 1-4, jempol menempel/menekuk dekat telapak, sehingga d_thumb_index_base kecil.
+    # Pada kepalan tangan (angka 0) atau jari 1-4, jempol menempel/menekuk dekat telapak.
     thumb_spread = (
         d_thumb_index_base > 0.38
         and d_thumb_middle_base > 0.40
@@ -108,61 +108,26 @@ def deteksi_array_jari(hand_landmarks):
 
     return [f_thumb, f_index, f_middle, f_ring, f_pinky]
 
-# State global UI untuk interaktivitas tombol
-zoom_level = 1.0
-is_fullscreen = False
-
-# Definisi koordinat tombol (akan diupdate dinamis sesuai lebar frame w)
-btn_zoom_in = [0, 0, 0, 0]
-btn_zoom_out = [0, 0, 0, 0]
-btn_fullscreen = [0, 0, 0, 0]
-btn_minimize = [0, 0, 0, 0]
-
-nama_jendela = "Math Gesture Game"
-
-def on_mouse_click(event, x, y, flags, param):
-    global zoom_level, is_fullscreen
-    if event == cv2.EVENT_LBUTTONDOWN:
-        # Klik Zoom In
-        if btn_zoom_in[0] <= x <= btn_zoom_in[2] and btn_zoom_in[1] <= y <= btn_zoom_in[3]:
-            zoom_level = min(2.5, round(zoom_level + 0.25, 2))
-        # Klik Zoom Out (Mengecilkan)
-        elif btn_zoom_out[0] <= x <= btn_zoom_out[2] and btn_zoom_out[1] <= y <= btn_zoom_out[3]:
-            zoom_level = max(1.0, round(zoom_level - 0.25, 2))
-        # Klik Fullscreen
-        elif btn_fullscreen[0] <= x <= btn_fullscreen[2] and btn_fullscreen[1] <= y <= btn_fullscreen[3]:
-            is_fullscreen = not is_fullscreen
-            prop = cv2.WINDOW_FULLSCREEN if is_fullscreen else cv2.WINDOW_NORMAL
-            cv2.setWindowProperty(nama_jendela, cv2.WND_PROP_FULLSCREEN, prop)
-        # Klik Minimize (Kembali ke ukuran standar)
-        elif btn_minimize[0] <= x <= btn_minimize[2] and btn_minimize[1] <= y <= btn_minimize[3]:
-            is_fullscreen = False
-            cv2.setWindowProperty(nama_jendela, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(nama_jendela, 640, 480)
-            zoom_level = 1.0
-
 def main():
-    global zoom_level, is_fullscreen, btn_zoom_in, btn_zoom_out, btn_fullscreen, btn_minimize
-
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Tidak dapat membuka kamera!")
         return
 
-    # Gunakan WINDOW_NORMAL | WINDOW_GUI_NORMAL untuk menghapus toolbar default Qt yang tidak berguna
+    nama_jendela = "Math Gesture Game"
+    # Menggunakan WINDOW_NORMAL | WINDOW_GUI_NORMAL untuk window bersih tanpa toolbar bawaan Qt
     cv2.namedWindow(nama_jendela, cv2.WINDOW_NORMAL | cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(nama_jendela, 640, 480)
-    cv2.setMouseCallback(nama_jendela, on_mouse_click)
 
     # Inisialisasi soal pertama
     angka1, angka2, hasil_asli, jawaban_kunci = buat_soal()
     skor = 0
     frame_benar_count = 0
     waktu_flash_benar = 0
+    is_fullscreen = False
 
     print("Game Matematika Deteksi Jari Siap Dimainkan!")
-    print("Gunakan tombol klik di layar atau shortcut keyboard:")
-    print("  'f': Fullscreen, 'm': Minimize/Reset, '+': Zoom In, '-': Zoom Out, 'q': Keluar")
+    print("Tekan 'q' pada jendela video untuk keluar (atau 'f' untuk toggle fullscreen).")
 
     while True:
         success, img = cap.read()
@@ -173,15 +138,6 @@ def main():
         # Mirror tampilan horizontal
         img = cv2.flip(img, 1)
         h, w, _ = img.shape
-
-        # Terapkan Digital Zoom jika diaktifkan
-        if zoom_level > 1.0:
-            crop_w = int(w / zoom_level)
-            crop_h = int(h / zoom_level)
-            start_x = (w - crop_w) // 2
-            start_y = (h - crop_h) // 2
-            img = img[start_y:start_y + crop_h, start_x:start_x + crop_w]
-            img = cv2.resize(img, (w, h))
 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
@@ -230,12 +186,6 @@ def main():
 
         sedang_benar = (time.time() - waktu_flash_benar) < 0.4
 
-        # Update koordinat Quick Buttons di pojok kanan atas
-        btn_zoom_in = [w - 390, 15, w - 305, 50]
-        btn_zoom_out = [w - 295, 15, w - 210, 50]
-        btn_fullscreen = [w - 200, 15, w - 105, 50]
-        btn_minimize = [w - 95, 15, w - 15, 50]
-
         # Overlay Kotak HUD Transparan
         overlay = img.copy()
         # Box Soal Kiri Atas
@@ -243,29 +193,7 @@ def main():
         # Box Status Kiri Bawah
         cv2.rectangle(overlay, (15, h - 130), (450, h - 15), (25, 25, 25), -1)
 
-        # Background Quick Buttons Kanan Atas
-        cv2.rectangle(overlay, (w - 400, 10), (w - 10, 55), (20, 20, 20), -1)
-
-        # Gambar Tombol Quick Action
-        cv2.rectangle(overlay, (btn_zoom_in[0], btn_zoom_in[1]), (btn_zoom_in[2], btn_zoom_in[3]), (50, 50, 50), -1)
-        cv2.rectangle(overlay, (btn_zoom_out[0], btn_zoom_out[1]), (btn_zoom_out[2], btn_zoom_out[3]), (50, 50, 50), -1)
-        cv2.rectangle(overlay, (btn_fullscreen[0], btn_fullscreen[1]), (btn_fullscreen[2], btn_fullscreen[3]), (50, 50, 50), -1)
-        cv2.rectangle(overlay, (btn_minimize[0], btn_minimize[1]), (btn_minimize[2], btn_minimize[3]), (50, 50, 50), -1)
-
         img = cv2.addWeighted(overlay, 0.70, img, 0.30, 0)
-
-        # Border Tombol Quick Action
-        cv2.rectangle(img, (btn_zoom_in[0], btn_zoom_in[1]), (btn_zoom_in[2], btn_zoom_in[3]), (120, 120, 120), 1)
-        cv2.rectangle(img, (btn_zoom_out[0], btn_zoom_out[1]), (btn_zoom_out[2], btn_zoom_out[3]), (120, 120, 120), 1)
-        cv2.rectangle(img, (btn_fullscreen[0], btn_fullscreen[1]), (btn_fullscreen[2], btn_fullscreen[3]), (120, 120, 120), 1)
-        cv2.rectangle(img, (btn_minimize[0], btn_minimize[1]), (btn_minimize[2], btn_minimize[3]), (120, 120, 120), 1)
-
-        # Teks Tombol Quick Action
-        zoom_text = f"+ Zoom" if zoom_level == 1.0 else f"+ Z({zoom_level}x)"
-        cv2.putText(img, zoom_text, (btn_zoom_in[0] + 6, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (255, 255, 255), 1)
-        cv2.putText(img, "- Zoom", (btn_zoom_out[0] + 12, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
-        cv2.putText(img, "FullScr", (btn_fullscreen[0] + 15, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1)
-        cv2.putText(img, "Minimize", (btn_minimize[0] + 8, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (200, 200, 200), 1)
 
         # Render Informasi Soal & Skor (TANPA membocorkan hasil asli)
         cv2.putText(img, f"Soal: {angka1} + {angka2} = ?", (30, 60),
@@ -319,19 +247,10 @@ def main():
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
-        elif key == ord('f'):  # Shortcut Fullscreen
+        elif key == ord('f'):  # Shortcut Fullscreen via keyboard jika diinginkan
             is_fullscreen = not is_fullscreen
             prop = cv2.WINDOW_FULLSCREEN if is_fullscreen else cv2.WINDOW_NORMAL
             cv2.setWindowProperty(nama_jendela, cv2.WND_PROP_FULLSCREEN, prop)
-        elif key in [ord('+'), ord('=')]:  # Shortcut Zoom In
-            zoom_level = min(2.5, round(zoom_level + 0.25, 2))
-        elif key in [ord('-'), ord('_')]:  # Shortcut Zoom Out
-            zoom_level = max(1.0, round(zoom_level - 0.25, 2))
-        elif key == ord('m'):  # Shortcut Minimize
-            is_fullscreen = False
-            cv2.setWindowProperty(nama_jendela, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(nama_jendela, 640, 480)
-            zoom_level = 1.0
 
     cap.release()
     cv2.destroyAllWindows()
